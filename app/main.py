@@ -105,7 +105,14 @@ def status_href(status_key: str) -> Optional[str]:
     if not href:
         log_event(logging.DEBUG, "No status href for key", status_key=status_key)
         return None
-    return href if href.startswith("http") else href
+    if href.startswith("http") or href.startswith("/api/"):
+        return href
+    # при поддержке чисел/строк с ID
+    try:
+        int_id = int(href)
+        return f"/api/v3/statuses/{int_id}"
+    except ValueError:
+        return href
 
 
 def extract_branch_name(ref: str) -> str:
