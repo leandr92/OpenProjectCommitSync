@@ -16,6 +16,7 @@ GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET")
 GITLAB_WEBHOOK_SECRET = os.getenv("GITLAB_WEBHOOK_SECRET")
 
 TASK_ID_PATTERN = re.compile(r"#(\d+)")
+BRANCH_TASK_PATTERN = re.compile(r"(?:^|[-_/])(\d+)")
 
 OPENPROJECT_AUTH_HEADER = ""
 if OPENPROJECT_API_KEY:
@@ -76,6 +77,17 @@ def add_comment_to_task(task_id: int, comment: str):
 def iter_task_ids(message: str) -> Iterable[int]:
     for sid in dict.fromkeys(TASK_ID_PATTERN.findall(message or "")):
         yield int(sid)
+
+
+def iter_branch_task_ids(branch_name: str) -> Iterable[int]:
+    ids = list(dict.fromkeys(TASK_ID_PATTERN.findall(branch_name or "")))
+    if ids:
+        for sid in ids:
+            yield int(sid)
+        return
+
+    for match in BRANCH_TASK_PATTERN.finditer(branch_name or ""):
+        yield int(match.group(1))
 
 
 def resolve_author(commit: Dict[str, Any]) -> str:
@@ -149,6 +161,21 @@ async def process_commits(commits: Iterable[Dict[str, Any]], source: str):
             await run_in_threadpool(add_comment_to_task, task_id, comment_text)
 
 
+async def notify_branch_creation(task_ids: Iterable[int], branch_name: str, source: str, branch_url: str = ""):
+    task_ids = list(dict.fromkeys(task_ids))
+    if not task_ids:
+        return
+
+    comment_lines = [f"🌱 Создана ветка ({source}): `{branch_name}`"]
+    if branch_url:
+        comment_lines.extend(["", f"🔗 {branch_url}"])
+
+    comment_text = "\n".join(comment_lines)
+
+    for task_id in task_ids:
+        await run_in_threadpool(add_comment_to_task, task_id, comment_text)
+
+
 @app.post("/github-webhook")
 async def github_webhook(
     request: Request,
@@ -160,14 +187,30 @@ async def github_webhook(
     # Проверка подписи GitHub
     verify_signature(body, x_hub_signature_256)
 
+    data = await request.json()
+
     # Обработка типа события
     event = (x_github_event or "").lower()
     if event == "ping":
         return {"status": "ok"}
+    if event == "create":
+        if (data.get("ref_type") or "").lower() != "branch":
+            return {"status": "ignored", "event": event}
+
+        branch_name = data.get("ref") or ""
+        task_ids = list(iter_branch_task_ids(branch_name))
+        if not task_ids:
+            return {"status": "ignored", "event": event}
+
+        repo = data.get("repository") or {}
+        repo_url = repo.get("html_url") or repo.get("url") or ""
+        branch_url = f"{repo_url}/tree/{branch_name}" if repo_url else ""
+        await notify_branch_creation(task_ids, branch_name, source="GitHub", branch_url=branch_url)
+        return {"status": "ok"}
+
     if event and event != "push":
         return {"status": "ignored", "event": event}
 
-    data = await request.json()
     await process_commits(data.get("commits", []), source="GitHub")
 
     return {"status": "ok"}
@@ -191,6 +234,19 @@ async def gitlab_webhook(
     object_kind = (data.get("object_kind") or "").lower()
     if object_kind and object_kind != "push":
         return {"status": "ignored", "object_kind": object_kind}
+
+    # Обработка создания ветки (новый push с нуля)
+    before = data.get("before") or ""
+    is_new_branch = before.strip("0") == "" and before != ""
+    if is_new_branch:
+        full_ref = data.get("ref") or ""
+        branch_name = full_ref.split("/", 2)[-1] if "/" in full_ref else full_ref
+        task_ids = list(iter_branch_task_ids(branch_name))
+        if task_ids:
+            project = data.get("project") or {}
+            project_url = project.get("web_url") or ""
+            branch_url = f"{project_url}/-/tree/{branch_name}" if project_url else ""
+            await notify_branch_creation(task_ids, branch_name, source="GitLab", branch_url=branch_url)
 
     await process_commits(data.get("commits", []), source="GitLab")
 
