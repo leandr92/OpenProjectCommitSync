@@ -13,6 +13,8 @@ services:
       - "8088:8088"
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8088"]
     restart: unless-stopped
+    networks:
+      - frontend
     # Если вы используете caddy-docker-proxy (Caddy с docker-плагином),
     # можно раскомментировать labels ниже, чтобы отдать путь /github-webhook
     # через Caddy на этот сервис. Требуется корректная настройка хоста.
@@ -25,3 +27,7 @@ services:
 
   # Сервис web определяется в базовом docker-compose OpenProject.
   # depends_on помогает запускать commit-sync после основного веб-приложения.
+
+networks:
+  frontend:
+    external: true

@@ -43,7 +43,20 @@ Docker Compose
   1. Соберите образ из текущего репозитория: `docker build -t openproject-commit-sync:latest .` (из каталога проекта) или используйте `docker compose build commit-sync`, если репозиторий уже лежит рядом с `docker-compose.yml`.
   2. Скопируйте нужный override-файл (`docker-compose.override.yml` или `docker-compose.traefik.override.yml`) в директорию, где находится основной `docker-compose.yml` OpenProject (там же запускаете `docker compose`).
   3. Убедитесь, что путь в директиве `build: .` указывает на корень этого репозитория (если репозиторий перенесён — скорректируйте путь).
-  4. Если используете Caddy (caddy-docker-proxy), раскомментируйте labels и задайте домен через `OPENPROJECT_HOST__NAME` — он должен совпадать с адресом, на который идут вебхуки.
+  4. Если разворачиваете с Caddy (`openproject/proxy`), добавьте сервис в сеть `frontend` (в override уже подключена) и пропишите в Caddyfile:
+     ```
+     handle_path /github-webhook* {
+       reverse_proxy commit-sync:8088
+     }
+     handle_path /gitlab-webhook* {
+       reverse_proxy commit-sync:8088
+     }
+     reverse_proxy * http://${APP_HOST}:8080 {
+       header_up X-Forwarded-Proto {header.X-Forwarded-Proto}
+       header_up X-Forwarded-For {header.X-Forwarded-For}
+     }
+     ```
+     Убедитесь, что `OPENPROJECT_HOST__NAME` совпадает с доменом, куда приходят вебхуки.
   5. Запустите OpenProject с override-файлом: `docker compose up -d` (или `docker compose up -d --build`, чтобы Docker сам пересобрал образ при первом запуске).
 
 Настройка GitHub Webhook
