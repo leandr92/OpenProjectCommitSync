@@ -9,7 +9,7 @@ services:
       - .env
     depends_on:
       - web
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8088"]
     restart: unless-stopped
     networks:
       - backend
@@ -20,6 +20,6 @@ services:
       - "traefik.http.routers.commit-sync.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
       - "traefik.http.routers.commit-sync.tls=${TRAEFIK_TLS:-true}"
       - "traefik.http.routers.commit-sync.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
-      - "traefik.http.services.commit-sync.loadbalancer.server.port=8000"
+      - "traefik.http.services.commit-sync.loadbalancer.server.port=8088"
       - "traefik.http.services.commit-sync.loadbalancer.passhostheader=true"
       - "traefik.docker.network=traefik-network"

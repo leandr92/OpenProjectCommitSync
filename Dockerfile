@@ -15,4 +15,4 @@ COPY ./app /app/app
 # Uvicorn не зафиксирован в Pipfile.lock — установим отдельно
 RUN pip install --no-cache-dir "uvicorn[standard]"
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8088"]

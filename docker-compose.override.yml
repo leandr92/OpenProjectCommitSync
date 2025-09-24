@@ -10,8 +10,8 @@ services:
     depends_on:
       - web
     ports:
-      - "8000:8000"
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+      - "8088:8088"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8088"]
     restart: unless-stopped
     # Если вы используете caddy-docker-proxy (Caddy с docker-плагином),
     # можно раскомментировать labels ниже, чтобы отдать путь /github-webhook
@@ -19,7 +19,7 @@ services:
     # labels:
     #   - "caddy=${PUBLIC_HOST:-example.com}"
     #   - "caddy.route.0=/github-webhook*"
-    #   - "caddy.route.0.reverse_proxy={{upstreams 8000}}"
+    #   - "caddy.route.0.reverse_proxy={{upstreams 8088}}"
 
   # Сервис web определяется в базовом docker-compose OpenProject.
   # depends_on помогает запускать commit-sync после основного веб-приложения.
