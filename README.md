@@ -43,12 +43,12 @@ Docker Compose
   1. Соберите образ из текущего репозитория: `docker build -t openproject-commit-sync:latest .` (из каталога проекта) или используйте `docker compose build commit-sync`, если репозиторий уже лежит рядом с `docker-compose.yml`.
   2. Скопируйте нужный override-файл (`docker-compose.override.yml` или `docker-compose.traefik.override.yml`) в директорию, где находится основной `docker-compose.yml` OpenProject (там же запускаете `docker compose`).
   3. Убедитесь, что путь в директиве `build: .` указывает на корень этого репозитория (если репозиторий перенесён — скорректируйте путь).
-  4. Если разворачиваете с Caddy (`openproject/proxy`), добавьте сервис в сеть `frontend` (в override уже подключена) и пропишите в Caddyfile:
+  4. Если разворачиваете с Caddy (`openproject/proxy`), убедитесь, что внешняя сеть `frontend` создана (`docker network create frontend` — один раз) и пропишите в Caddyfile:
      ```
-     handle_path /github-webhook* {
+     handle /github-webhook* {
        reverse_proxy commit-sync:8088
      }
-     handle_path /gitlab-webhook* {
+     handle /gitlab-webhook* {
        reverse_proxy commit-sync:8088
      }
      reverse_proxy * http://${APP_HOST}:8080 {
