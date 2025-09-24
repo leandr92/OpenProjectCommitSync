@@ -19,6 +19,7 @@ GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET")
 GITLAB_WEBHOOK_SECRET = os.getenv("GITLAB_WEBHOOK_SECRET")
 STATUS_MAPPING_PATH = Path(__file__).resolve().parent / "status_mapping.json"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+GITLAB_COMMENTS_ENABLED = os.getenv("GITLAB_COMMENTS_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
 
 TASK_ID_PATTERN = re.compile(r"#(\d+)")
 BRANCH_TASK_PATTERN = re.compile(r"(?:^|[-_/])(\d+)")
@@ -352,7 +353,12 @@ def format_changed_files(commit: Dict[str, Any]) -> str:
     return ""
 
 
-async def process_commits(commits: Iterable[Dict[str, Any]], source: str, branch_name: str = "") -> List[int]:
+async def process_commits(
+    commits: Iterable[Dict[str, Any]],
+    source: str,
+    branch_name: str = "",
+    allow_comments: bool = True,
+) -> List[int]:
     collected_ids: List[int] = []
     for commit in commits or []:
         message = (commit.get("message") or "").strip()
@@ -395,36 +401,56 @@ async def process_commits(commits: Iterable[Dict[str, Any]], source: str, branch
 
         comment_text = "\n".join(comment_lines)
 
-        for task_id in task_ids:
-            collected_ids.append(task_id)
-            await run_in_threadpool(add_comment_to_task, task_id, comment_text)
-        log_event(
-            logging.INFO,
-            "Comment posted for commit",
-            tasks=task_ids,
-            source=source,
-            branch=branch_name or None,
-            url=url or None,
-        )
+        if allow_comments:
+            for task_id in task_ids:
+                collected_ids.append(task_id)
+                await run_in_threadpool(add_comment_to_task, task_id, comment_text)
+            log_event(
+                logging.INFO,
+                "Comment posted for commit",
+                tasks=task_ids,
+                source=source,
+                branch=branch_name or None,
+                url=url or None,
+            )
+        else:
+            collected_ids.extend(task_ids)
+            log_event(
+                logging.INFO,
+                "Commit processed without comment (comments disabled)",
+                tasks=task_ids,
+                source=source,
+                branch=branch_name or None,
+                url=url or None,
+            )
 
     return list(dict.fromkeys(collected_ids))
 
 
-async def notify_branch_creation(task_ids: Iterable[int], branch_name: str, source: str, branch_url: str = ""):
+async def notify_branch_creation(
+    task_ids: Iterable[int],
+    branch_name: str,
+    source: str,
+    branch_url: str = "",
+    allow_comment: bool = True,
+):
     task_ids = list(dict.fromkeys(task_ids))
     if not task_ids:
         return
 
-    log_event(logging.INFO, "Recording branch creation", source=source, branch=branch_name, tasks=task_ids, branch_url=branch_url or None)
+    if allow_comment:
+        log_event(logging.INFO, "Recording branch creation", source=source, branch=branch_name, tasks=task_ids, branch_url=branch_url or None)
 
-    comment_lines = [f"🌱 Создана ветка ({source}): `{branch_name}`"]
-    if branch_url:
-        comment_lines.extend(["", f"🔗 {branch_url}"])
+        comment_lines = [f"🌱 Создана ветка ({source}): `{branch_name}`"]
+        if branch_url:
+            comment_lines.extend(["", f"🔗 {branch_url}"])
 
-    comment_text = "\n".join(comment_lines)
+        comment_text = "\n".join(comment_lines)
 
-    for task_id in task_ids:
-        await run_in_threadpool(add_comment_to_task, task_id, comment_text)
+        for task_id in task_ids:
+            await run_in_threadpool(add_comment_to_task, task_id, comment_text)
+    else:
+        log_event(logging.INFO, "Branch creation detected, comments disabled", source=source, branch=branch_name, tasks=task_ids)
 
     await set_status_for_tasks(task_ids, "in_progress")
 
@@ -517,10 +543,21 @@ async def gitlab_webhook(
             project = data.get("project") or {}
             project_url = project.get("web_url") or ""
             branch_url = f"{project_url}/-/tree/{branch_name}" if project_url else ""
-            log_event(logging.INFO, "GitLab branch detected", branch=branch_name, tasks=task_ids, branch_url=branch_url or None)
-            await notify_branch_creation(task_ids, branch_name, source="GitLab", branch_url=branch_url)
+            log_event(logging.INFO, "GitLab branch detected", branch=branch_name, tasks=task_ids, branch_url=branch_url or None, comments_enabled=GITLAB_COMMENTS_ENABLED)
+            await notify_branch_creation(
+                task_ids,
+                branch_name,
+                source="GitLab",
+                branch_url=branch_url,
+                allow_comment=GITLAB_COMMENTS_ENABLED,
+            )
 
-    task_ids_from_commits = await process_commits(data.get("commits", []), source="GitLab", branch_name=branch_name)
+    task_ids_from_commits = await process_commits(
+        data.get("commits", []),
+        source="GitLab",
+        branch_name=branch_name,
+        allow_comments=GITLAB_COMMENTS_ENABLED,
+    )
 
     status_key = derive_status_key_from_branch(branch_name)
     if status_key:

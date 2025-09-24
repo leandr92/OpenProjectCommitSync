@@ -11,6 +11,7 @@ OpenProject Commit Sync
 - `OPENPROJECT_API_KEY` — персональный API key (используется Basic Auth `apikey:TOKEN`)
 - `GITHUB_WEBHOOK_SECRET` — секрет подписи GitHub (X-Hub-Signature-256)
 - `GITLAB_WEBHOOK_SECRET` — секрет токена GitLab (X-Gitlab-Token)
+- `GITLAB_COMMENTS_ENABLED` (опционально) — `true` для включения комментариев по событиям GitLab, `false` (по умолчанию) оставляет только смену статусов.
 - `STATUS_MAPPING_FILE` (опционально) — путь к файлу соответствий статусов (по умолчанию `status_mapping.json`)
 
 Развертывание
@@ -78,6 +79,7 @@ OpenProject Commit Sync
 - Secret Token: `GITLAB_WEBHOOK_SECRET`
 - Trigger: включите `Push events`
 - Кнопка *Test → Push events* должна вернуть `{"status":"ok"}`
+- По умолчанию сервис не создаёт комментарии для GitLab (поддержка статусов и так есть в OpenProject). Чтобы включить/отключить комментарии, задайте переменную `GITLAB_COMMENTS_ENABLED` (`true`/`false`).
 
 Использование
 -------------
