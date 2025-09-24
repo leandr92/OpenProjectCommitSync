@@ -17,9 +17,11 @@ services:
     # можно раскомментировать labels ниже, чтобы отдать путь /github-webhook
     # через Caddy на этот сервис. Требуется корректная настройка хоста.
     # labels:
-    #   - "caddy=${PUBLIC_HOST:-example.com}"
+    #   - "caddy=${OPENPROJECT_HOST__NAME:-openproject.yourdomain.com}"
     #   - "caddy.route.0=/github-webhook*"
     #   - "caddy.route.0.reverse_proxy={{upstreams 8088}}"
+    #   - "caddy.route.1=/gitlab-webhook*"
+    #   - "caddy.route.1.reverse_proxy={{upstreams 8088}}"
 
   # Сервис web определяется в базовом docker-compose OpenProject.
   # depends_on помогает запускать commit-sync после основного веб-приложения.

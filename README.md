@@ -39,6 +39,12 @@ Docker Compose
 - `docker-compose.override.yml` — добавляет сервис `commit-sync` к базовой конфигурации OpenProject и прокидывает порт `8088`. Файл содержит комментарии для настройки с Caddy (caddy-docker-proxy) либо ручного проксирования.
 - `docker-compose.traefik.override.yml` — вариант для окружения с Traefik: подключает сервис к сетям `backend` и `traefik-network`, добавляет labels для маршрутизации Traefik.
 - После размещения override-файла рядом с основным docker-compose OpenProject запустите: `docker compose up -d`.
+- Если разворачиваете вместе с OpenProject:
+  1. Соберите образ из текущего репозитория: `docker build -t openproject-commit-sync:latest .` (из каталога проекта) или используйте `docker compose build commit-sync`, если репозиторий уже лежит рядом с `docker-compose.yml`.
+  2. Скопируйте нужный override-файл (`docker-compose.override.yml` или `docker-compose.traefik.override.yml`) в директорию, где находится основной `docker-compose.yml` OpenProject (там же запускаете `docker compose`).
+  3. Убедитесь, что путь в директиве `build: .` указывает на корень этого репозитория (если репозиторий перенесён — скорректируйте путь).
+  4. Если используете Caddy (caddy-docker-proxy), раскомментируйте labels и задайте домен через `OPENPROJECT_HOST__NAME` — он должен совпадать с адресом, на который идут вебхуки.
+  5. Запустите OpenProject с override-файлом: `docker compose up -d` (или `docker compose up -d --build`, чтобы Docker сам пересобрал образ при первом запуске).
 
 Настройка GitHub Webhook
 - В репозитории GitHub: Settings → Webhooks → Add webhook
