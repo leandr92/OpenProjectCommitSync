@@ -5,6 +5,7 @@ import os
 import hmac
 import hashlib
 import re
+import base64
 from typing import Iterable, Dict, Any
 
 app = FastAPI()
@@ -15,6 +16,11 @@ GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET")
 GITLAB_WEBHOOK_SECRET = os.getenv("GITLAB_WEBHOOK_SECRET")
 
 TASK_ID_PATTERN = re.compile(r"#(\d+)")
+
+OPENPROJECT_AUTH_HEADER = ""
+if OPENPROJECT_API_KEY:
+    basic_token = base64.b64encode(f"apikey:{OPENPROJECT_API_KEY}".encode()).decode()
+    OPENPROJECT_AUTH_HEADER = f"Basic {basic_token}"
 
 
 def verify_signature(payload_body: bytes, signature_header: str):
@@ -47,13 +53,13 @@ def verify_gitlab_token(token_header: str):
 
 
 def add_comment_to_task(task_id: int, comment: str):
-    if not OPENPROJECT_URL or not OPENPROJECT_API_KEY:
+    if not OPENPROJECT_URL or not OPENPROJECT_AUTH_HEADER:
         raise HTTPException(status_code=500, detail="Server misconfigured: missing OPENPROJECT_URL or OPENPROJECT_API_KEY")
 
     url = f"{OPENPROJECT_URL}/api/v3/work_packages/{task_id}/activities"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {OPENPROJECT_API_KEY}"
+        "Authorization": OPENPROJECT_AUTH_HEADER
     }
     payload = {"comment": {"raw": comment}}
 
