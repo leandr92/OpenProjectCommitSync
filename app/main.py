@@ -52,13 +52,13 @@ def log_event(level: int, message: str, **context):
 
 def normalize_status_value(value: Any) -> Optional[str]:
     if isinstance(value, int):
-        return f"/api/v3/statuses/{value}"
+        return str(value)
     if isinstance(value, str):
         raw = value.strip()
         if not raw:
             return None
         if raw.isdigit():
-            return f"/api/v3/statuses/{raw}"
+            return raw
         if raw.startswith("http") or raw.startswith("/api/"):
             return raw
         if raw.startswith("/"):
