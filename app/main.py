@@ -6,7 +6,7 @@ import hmac
 import hashlib
 import re
 import base64
-from typing import Iterable, Dict, Any
+from typing import Iterable, Dict, Any, List
 
 app = FastAPI()
 
@@ -98,6 +98,30 @@ def resolve_author(commit: Dict[str, Any]) -> str:
     )
 
 
+def format_changed_files(commit: Dict[str, Any]) -> str:
+    sections: List[str] = []
+    change_map = [
+        ("added", "+"),
+        ("modified", "~"),
+        ("removed", "-"),
+    ]
+    for key, marker in change_map:
+        files = [f for f in commit.get(key, []) if isinstance(f, str) and f]
+        if not files:
+            continue
+
+        display = files[:5]
+        suffix = ""
+        if len(files) > len(display):
+            suffix = f" и ещё {len(files) - len(display)}"
+
+        sections.append(f"{marker} {', '.join(display)}{suffix}")
+
+    if sections:
+        return "Файлы: " + "; ".join(sections)
+    return ""
+
+
 async def process_commits(commits: Iterable[Dict[str, Any]], source: str):
     for commit in commits or []:
         message = (commit.get("message") or "").strip()
@@ -114,6 +138,10 @@ async def process_commits(commits: Iterable[Dict[str, Any]], source: str):
         comment_lines = [f"💡 Новый коммит ({source}) от {author}:", "", message]
         if url:
             comment_lines.extend(["", f"🔗 {url}"])
+
+        files_line = format_changed_files(commit)
+        if files_line:
+            comment_lines.extend(["", files_line])
 
         comment_text = "\n".join(comment_lines)
 
