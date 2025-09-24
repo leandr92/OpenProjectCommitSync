@@ -56,7 +56,7 @@ Docker Compose
        header_up X-Forwarded-For {header.X-Forwarded-For}
      }
      ```
-     Убедитесь, что `OPENPROJECT_HOST__NAME` совпадает с доменом, куда приходят вебхуки.
+     Если конфиг Caddy берётся из Dockerfile/шаблона (например, `Caddyfile.template`), после правок пересоберите образ: `docker compose build proxy` и перезапустите `docker compose up -d proxy`. Убедитесь, что `OPENPROJECT_HOST__NAME` совпадает с доменом, куда приходят вебхуки.
   5. Запустите OpenProject с override-файлом: `docker compose up -d` (или `docker compose up -d --build`, чтобы Docker сам пересобрал образ при первом запуске).
 
 Настройка GitHub Webhook
