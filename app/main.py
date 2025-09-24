@@ -373,12 +373,14 @@ async def process_commits(commits: Iterable[Dict[str, Any]], source: str, branch
             continue
 
         branch_fragment = f" в `{branch_name}`" if branch_name else ""
-        comment_lines = [f"💡 Новый коммит ({source}){branch_fragment} от {author}:"]
+        comment_lines = [f"💡 Новый коммит ({source}){branch_fragment} от {author}"]
         if source_branch:
             comment_lines.append(f"↪️ Из ветки `{source_branch}`")
-        comment_lines.extend(["", message])
+
+        comment_lines.extend(["", "📝 Сообщение коммита:", message])
+
         if url:
-            comment_lines.extend(["", f"🔗 {url}"])
+            comment_lines.extend(["", "🔗 Ссылка на коммит:", url])
 
         files_line = format_changed_files(commit)
         if files_line:
