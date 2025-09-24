@@ -1,2 +1,15 @@
 .vscode/launch.json
 .env
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.coverage
+dist/
+build/
+.DS_Store
+*.log
+app/__pycache__/

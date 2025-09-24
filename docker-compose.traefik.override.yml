@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  commit-sync:
+    build: .
+    image: openproject-commit-sync:latest
+    container_name: commit-sync
+    env_file:
+      - .env
+    depends_on:
+      - web
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+    networks:
+      - backend
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.commit-sync.rule=Host(`${OPENPROJECT_HOST__NAME:-openproject.yourdomain.com}`) && (PathPrefix(`/github-webhook`) || PathPrefix(`/gitlab-webhook`))"
+      - "traefik.http.routers.commit-sync.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.commit-sync.tls=${TRAEFIK_TLS:-true}"
+      - "traefik.http.routers.commit-sync.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.services.commit-sync.loadbalancer.server.port=8000"
+      - "traefik.http.services.commit-sync.loadbalancer.passhostheader=true"
+      - "traefik.docker.network=traefik-network"
