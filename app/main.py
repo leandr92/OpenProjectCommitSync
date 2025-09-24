@@ -17,8 +17,7 @@ OPENPROJECT_URL = os.getenv("OPENPROJECT_URL")
 OPENPROJECT_API_KEY = os.getenv("OPENPROJECT_API_KEY")
 GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET")
 GITLAB_WEBHOOK_SECRET = os.getenv("GITLAB_WEBHOOK_SECRET")
-DEFAULT_MAPPING_PATH = Path(__file__).resolve().parent / "status_mapping.json"
-STATUS_MAPPING_FILE = Path(os.getenv("STATUS_MAPPING_FILE", str(DEFAULT_MAPPING_PATH)))
+STATUS_MAPPING_PATH = Path(__file__).resolve().parent / "status_mapping.json"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
 TASK_ID_PATTERN = re.compile(r"#(\d+)")
@@ -67,9 +66,8 @@ def normalize_status_value(value: Any) -> Optional[str]:
 
 
 def load_status_mapping() -> Dict[str, str]:
-    path = STATUS_MAPPING_FILE
+    path = STATUS_MAPPING_PATH
     if not path.exists():
-        log_event(logging.WARNING, "Status mapping file not found", path=str(path))
         return {}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
