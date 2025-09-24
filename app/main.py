@@ -285,7 +285,7 @@ def iter_task_ids(message: str) -> Iterable[int]:
         before = text[: match.start()].lower()
         # Игнорируем ID из системной строки мержа PR
         if before.endswith("pull request ") or before.endswith("pull-request "):
-            log_event(logging.DEBUG, "Skipped PR number in commit message", candidate=raw, message=message)
+            log_event(logging.DEBUG, "Skipped PR number in commit message", candidate=raw, commit_message=message)
             continue
         if raw not in seen:
             seen[raw] = None
