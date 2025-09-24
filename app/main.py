@@ -23,6 +23,9 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
 TASK_ID_PATTERN = re.compile(r"#(\d+)")
 BRANCH_TASK_PATTERN = re.compile(r"(?:^|[-_/])(\d+)")
+MERGE_PR_PATTERN = re.compile(r"Merge pull request #\d+ from [^/\s]+/(?P<branch>[\w\-./]+)", re.IGNORECASE)
+MERGE_BRANCH_PATTERN = re.compile(r"Merge branch '([^']+)' into '([^']+)'", re.IGNORECASE)
+MERGE_REMOTE_PATTERN = re.compile(r"Merge remote-tracking branch '([^']+)'", re.IGNORECASE)
 
 OPENPROJECT_AUTH_HEADER = ""
 if OPENPROJECT_API_KEY:
@@ -126,6 +129,33 @@ def derive_status_key_from_branch(branch_name: str) -> Optional[str]:
     return None
 
 
+def extract_source_branch_from_message(message: str, target_branch: str = "") -> Optional[str]:
+    first_line = (message or "").splitlines()[0]
+
+    match = MERGE_PR_PATTERN.search(first_line)
+    if match:
+        branch = match.group("branch")
+        branch = branch.split("/", 1)[-1] if "/" in branch else branch
+        if branch and branch != target_branch:
+            return branch
+
+    match = MERGE_BRANCH_PATTERN.search(first_line)
+    if match:
+        branch = match.group(1).strip()
+        branch = branch.replace("origin/", "", 1)
+        if branch and branch != target_branch:
+            return branch
+
+    match = MERGE_REMOTE_PATTERN.search(first_line)
+    if match:
+        branch = match.group(1).strip()
+        branch = branch.replace("origin/", "", 1)
+        if branch and branch != target_branch:
+            return branch
+
+    return None
+
+
 def update_task_status(task_id: int, status_key: str):
     href = status_href(status_key)
     if not href:
@@ -147,6 +177,9 @@ def update_task_status(task_id: int, status_key: str):
         log_event(logging.ERROR, "Failed to fetch work package", task_id=task_id, error=str(exc))
         raise HTTPException(status_code=502, detail=f"OpenProject request failed: {exc}")
 
+    if resp.status_code == 404:
+        log_event(logging.WARNING, "Work package not found when fetching", task_id=task_id)
+        return
     if resp.status_code >= 300:
         log_event(logging.ERROR, "OpenProject returned error on fetch", task_id=task_id, status_code=resp.status_code)
         raise HTTPException(status_code=500, detail=f"OpenProject API error: {resp.text}")
@@ -171,6 +204,9 @@ def update_task_status(task_id: int, status_key: str):
         log_event(logging.ERROR, "Failed to update work package status", task_id=task_id, error=str(exc))
         raise HTTPException(status_code=502, detail=f"OpenProject request failed: {exc}")
 
+    if patch_resp.status_code == 404:
+        log_event(logging.WARNING, "Work package not found when updating status", task_id=task_id)
+        return
     if patch_resp.status_code >= 300:
         log_event(logging.ERROR, "OpenProject returned error on status update", task_id=task_id, status_code=patch_resp.status_code)
         raise HTTPException(status_code=500, detail=f"OpenProject API error: {patch_resp.text}")
@@ -242,8 +278,18 @@ def add_comment_to_task(task_id: int, comment: str):
 
 
 def iter_task_ids(message: str) -> Iterable[int]:
-    for sid in dict.fromkeys(TASK_ID_PATTERN.findall(message or "")):
-        yield int(sid)
+    seen: Dict[str, None] = {}
+    text = message or ""
+    for match in TASK_ID_PATTERN.finditer(text):
+        raw = match.group(1)
+        before = text[: match.start()].lower()
+        # Игнорируем ID из системной строки мержа PR
+        if before.endswith("pull request ") or before.endswith("pull-request "):
+            log_event(logging.DEBUG, "Skipped PR number in commit message", candidate=raw, message=message)
+            continue
+        if raw not in seen:
+            seen[raw] = None
+            yield int(raw)
 
 
 def iter_branch_task_ids(branch_name: str) -> Iterable[int]:
@@ -310,12 +356,15 @@ async def process_commits(commits: Iterable[Dict[str, Any]], source: str, branch
 
         url = commit.get("url") or commit.get("web_url") or ""
         author = resolve_author(commit)
+        source_branch = extract_source_branch_from_message(message, branch_name)
+
         log_event(
             logging.DEBUG,
             "Processing commit",
             source=source,
             author=author,
             branch=branch_name or None,
+            source_branch=source_branch or None,
             url=url or None,
         )
 
@@ -323,7 +372,11 @@ async def process_commits(commits: Iterable[Dict[str, Any]], source: str, branch
         if not task_ids:
             continue
 
-        comment_lines = [f"💡 Новый коммит ({source}) от {author}:", "", message]
+        branch_fragment = f" в `{branch_name}`" if branch_name else ""
+        comment_lines = [f"💡 Новый коммит ({source}){branch_fragment} от {author}:"]
+        if source_branch:
+            comment_lines.append(f"↪️ Из ветки `{source_branch}`")
+        comment_lines.extend(["", message])
         if url:
             comment_lines.extend(["", f"🔗 {url}"])
 
