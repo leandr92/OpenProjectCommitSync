@@ -369,6 +369,8 @@ async def process_commits(commits: Iterable[Dict[str, Any]], source: str, branch
         )
 
         task_ids = list(iter_task_ids(message))
+        if not task_ids and source_branch:
+            task_ids = list(iter_branch_task_ids(source_branch))
         if not task_ids:
             continue
 
