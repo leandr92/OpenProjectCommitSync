@@ -1,0 +1,5 @@
+{
+  "in_progress": "/api/v3/statuses/2",
+  "testing": "/api/v3/statuses/3",
+  "completed": "/api/v3/statuses/4"
+}
