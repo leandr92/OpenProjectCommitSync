@@ -1,5 +1,5 @@
 {
-  "in_progress": "/api/v3/statuses/2",
-  "testing": "/api/v3/statuses/3",
-  "completed": "/api/v3/statuses/4"
+  "in_progress": 1267,
+  "testing": 1269,
+  "completed": 1268
 }
