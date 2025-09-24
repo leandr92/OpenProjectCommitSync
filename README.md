@@ -19,8 +19,15 @@ OpenProject Commit Sync
 - Через Pipenv:
   - `pip install pipenv`
   - `pipenv install` (установит fastapi, requests)
-  - `pipenv run pip install "uvicorn[standard]"` (локально добиваем uvicorn)
+  - `pipenv install "uvicorn[standard]"` (локально добиваем uvicorn)
   - Запуск: `pipenv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --env-file .env`
+
+Запуск в среде разработки
+1. Скопируйте `.env.example` в `.env` и укажите реальные значения `OPENPROJECT_URL`, `OPENPROJECT_API_KEY`, `GITHUB_WEBHOOK_SECRET`, `GITLAB_WEBHOOK_SECRET`.
+2. Создайте виртуальное окружение: `python -m venv .venv && source .venv/bin/activate` (Windows: `.venv\Scripts\activate`).
+3. Установите зависимости: `pip install fastapi requests "uvicorn[standard]"`.
+4. Запустите сервис: `uvicorn app.main:app --host 0.0.0.0 --port 8000 --env-file .env`.
+5. Убедитесь, что эндпоинты `/github-webhook` и `/gitlab-webhook` отвечают `{"status": "ok"}` на тестовые запросы из GitHub/GitLab (например, через их UI "Test" → "Ping/Pull").
 
 Docker
 - Сборка: `docker build -t openproject-commit-sync:latest .`
