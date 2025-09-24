@@ -211,6 +211,16 @@ async def github_webhook(
     if event and event != "push":
         return {"status": "ignored", "event": event}
 
+    if data.get("created"):
+        full_ref = data.get("ref") or ""
+        branch_name = full_ref.split("/", 2)[-1] if "/" in full_ref else full_ref
+        task_ids = list(iter_branch_task_ids(branch_name))
+        if task_ids:
+            repo = data.get("repository") or {}
+            repo_url = repo.get("html_url") or repo.get("url") or ""
+            branch_url = f"{repo_url}/tree/{branch_name}" if repo_url else ""
+            await notify_branch_creation(task_ids, branch_name, source="GitHub", branch_url=branch_url)
+
     await process_commits(data.get("commits", []), source="GitHub")
 
     return {"status": "ok"}
