@@ -10,7 +10,7 @@ OpenProject Commit Sync
   - `OPENPROJECT_API_KEY` — API key пользователя в OpenProject
   - `GITHUB_WEBHOOK_SECRET` — секрет для GitHub Webhook (X-Hub-Signature-256)
   - `GITLAB_WEBHOOK_SECRET` — секрет для GitLab Webhook (X-Gitlab-Token)
- 
+
 Быстрый старт (локально, без Docker)
 - Через venv + pip:
   - `python -m venv .venv && source .venv/bin/activate`
