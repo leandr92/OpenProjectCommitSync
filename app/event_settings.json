@@ -1,0 +1,10 @@
+{
+  "github": {
+    "commit_comment": true,
+    "branch_comment": true
+  },
+  "gitlab": {
+    "commit_comment": false,
+    "branch_comment": true
+  }
+}

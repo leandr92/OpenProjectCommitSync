@@ -19,7 +19,7 @@ GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET")
 GITLAB_WEBHOOK_SECRET = os.getenv("GITLAB_WEBHOOK_SECRET")
 STATUS_MAPPING_PATH = Path(__file__).resolve().parent / "status_mapping.json"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-GITLAB_COMMENTS_ENABLED = os.getenv("GITLAB_COMMENTS_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
+EVENT_SETTINGS_PATH = Path(__file__).resolve().parent / "event_settings.json"
 
 TASK_ID_PATTERN = re.compile(r"#(\d+)")
 BRANCH_TASK_PATTERN = re.compile(r"(?:^|[-_/])(\d+)")
@@ -48,6 +48,13 @@ def log_event(level: int, message: str, **context):
         logger.log(level, f"{message} | {context_str}")
     else:
         logger.log(level, message)
+
+
+def event_flag(provider: str, key: str) -> bool:
+    return EVENT_SETTINGS.get(provider, {}).get(
+        key,
+        DEFAULT_EVENT_SETTINGS.get(provider, {}).get(key, False),
+    )
 
 
 def normalize_status_value(value: Any) -> Optional[str]:
@@ -87,6 +94,42 @@ def load_status_mapping() -> Dict[str, str]:
 
 
 STATUS_MAPPING = load_status_mapping()
+DEFAULT_EVENT_SETTINGS = {
+    "github": {
+        "commit_comment": True,
+        "branch_comment": True,
+    },
+    "gitlab": {
+        "commit_comment": False,
+        "branch_comment": True,
+    },
+}
+
+
+def load_event_settings() -> Dict[str, Dict[str, bool]]:
+    if not EVENT_SETTINGS_PATH.exists():
+        log_event(logging.WARNING, "Event settings file not found, using defaults", path=str(EVENT_SETTINGS_PATH))
+        return DEFAULT_EVENT_SETTINGS.copy()
+
+    try:
+        data = json.loads(EVENT_SETTINGS_PATH.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as exc:
+        log_event(logging.ERROR, "Failed to load event settings, using defaults", error=str(exc), path=str(EVENT_SETTINGS_PATH))
+        return DEFAULT_EVENT_SETTINGS.copy()
+
+    settings: Dict[str, Dict[str, bool]] = {}
+    for provider, provider_defaults in DEFAULT_EVENT_SETTINGS.items():
+        provider_data = data.get(provider, {}) if isinstance(data, dict) else {}
+        merged = {}
+        for key, default_value in provider_defaults.items():
+            merged[key] = bool(provider_data.get(key, default_value)) if isinstance(provider_data, dict) else default_value
+        settings[provider] = merged
+
+    log_event(logging.INFO, "Event settings loaded", settings=settings)
+    return settings
+
+
+EVENT_SETTINGS = load_event_settings()
 
 
 def build_api_url(path: str) -> str:
@@ -486,8 +529,15 @@ async def github_webhook(
         repo = data.get("repository") or {}
         repo_url = repo.get("html_url") or repo.get("url") or ""
         branch_url = f"{repo_url}/tree/{branch_name}" if repo_url else ""
-        log_event(logging.INFO, "GitHub branch create", branch=branch_name, tasks=task_ids, branch_url=branch_url or None)
-        await notify_branch_creation(task_ids, branch_name, source="GitHub", branch_url=branch_url)
+        allow_branch_comment = event_flag("github", "branch_comment")
+        log_event(logging.INFO, "GitHub branch create", branch=branch_name, tasks=task_ids, branch_url=branch_url or None, comment_enabled=allow_branch_comment)
+        await notify_branch_creation(
+            task_ids,
+            branch_name,
+            source="GitHub",
+            branch_url=branch_url,
+            allow_comment=allow_branch_comment,
+        )
         return {"status": "ok"}
 
     if event and event != "push":
@@ -499,10 +549,23 @@ async def github_webhook(
             repo = data.get("repository") or {}
             repo_url = repo.get("html_url") or repo.get("url") or ""
             branch_url = f"{repo_url}/tree/{branch_name}" if repo_url else ""
-            log_event(logging.INFO, "GitHub branch detected in push", branch=branch_name, tasks=task_ids, branch_url=branch_url or None)
-            await notify_branch_creation(task_ids, branch_name, source="GitHub", branch_url=branch_url)
+            allow_branch_comment = event_flag("github", "branch_comment")
+            log_event(logging.INFO, "GitHub branch detected in push", branch=branch_name, tasks=task_ids, branch_url=branch_url or None, comment_enabled=allow_branch_comment)
+            await notify_branch_creation(
+                task_ids,
+                branch_name,
+                source="GitHub",
+                branch_url=branch_url,
+                allow_comment=allow_branch_comment,
+            )
 
-    task_ids_from_commits = await process_commits(data.get("commits", []), source="GitHub", branch_name=branch_name)
+    allow_commit_comments = event_flag("github", "commit_comment")
+    task_ids_from_commits = await process_commits(
+        data.get("commits", []),
+        source="GitHub",
+        branch_name=branch_name,
+        allow_comments=allow_commit_comments,
+    )
 
     status_key = derive_status_key_from_branch(branch_name)
     if status_key:
@@ -543,20 +606,21 @@ async def gitlab_webhook(
             project = data.get("project") or {}
             project_url = project.get("web_url") or ""
             branch_url = f"{project_url}/-/tree/{branch_name}" if project_url else ""
-            log_event(logging.INFO, "GitLab branch detected", branch=branch_name, tasks=task_ids, branch_url=branch_url or None, comments_enabled=GITLAB_COMMENTS_ENABLED)
+            allow_branch_comment = event_flag("gitlab", "branch_comment")
+            log_event(logging.INFO, "GitLab branch detected", branch=branch_name, tasks=task_ids, branch_url=branch_url or None, comment_enabled=allow_branch_comment)
             await notify_branch_creation(
                 task_ids,
                 branch_name,
                 source="GitLab",
                 branch_url=branch_url,
-                allow_comment=GITLAB_COMMENTS_ENABLED,
+                allow_comment=allow_branch_comment,
             )
 
     task_ids_from_commits = await process_commits(
         data.get("commits", []),
         source="GitLab",
         branch_name=branch_name,
-        allow_comments=GITLAB_COMMENTS_ENABLED,
+        allow_comments=event_flag("gitlab", "commit_comment"),
     )
 
     status_key = derive_status_key_from_branch(branch_name)
